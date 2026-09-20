@@ -13,14 +13,10 @@ refuses to run if any exist.
 """
 
 import json
-import os
 from pathlib import Path
-
-import psycopg2
-from dotenv import load_dotenv
+from rag_nps.db_connect import get_connection
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/rag_nps/load_incidents.py -> project root
-load_dotenv(PROJECT_ROOT / ".env")
 
 # %(name)s placeholders are filled from each row dict by key. The JSON "date" field goes into
 # the incident_date column; None becomes NULL; the header_lines list becomes a text[] array.
@@ -34,12 +30,7 @@ VALUES (%(incident_id)s, %(park_code)s, %(park_name)s, %(source_url)s, %(seq)s, 
 with open(PROJECT_ROOT / "data" / "incidents.jsonl", encoding="utf-8") as f:
     rows = [json.loads(line) for line in f]
 
-conn = psycopg2.connect(
-    host=os.environ["DB_HOST"],
-    database=os.environ["DB_NAME"],
-    user=os.environ["DB_USER"],
-    password=os.environ["DB_PASSWORD"],
-)
+conn = get_connection()
 
 with conn, conn.cursor() as cur:  # commits on success, rolls back on any error
     # The guard: TRUNCATE below would silently destroy any embeddings already paid for.
