@@ -14,6 +14,7 @@ refuses to run if any exist.
 
 import json
 from pathlib import Path
+
 from rag_nps.db_connect import get_connection
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/rag_nps/load_incidents.py -> project root
