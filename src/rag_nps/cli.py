@@ -1,0 +1,95 @@
+"""
+Interactive command-line ask-loop: type a question, get an answer with numbered
+citations and a source list grouped by URL (several incidents can share one park page).
+Non-streaming; streaming is a later step (see progress-and-next-steps.md,
+"Citations and streaming"). No filters are passed to `answer_question` yet, since the
+router doesn't exist.
+"""
+
+import re
+
+from rag_nps.db_connect import get_connection
+from rag_nps.pipeline import answer_question
+
+# Matches the exact citation format SYSTEM_PROMPT asks for, e.g. [yose-00571].
+CITATION_RE = re.compile(r"\[([a-z]+-\d+)\]")
+
+EXIT_WORDS = {"exit", "quit"}
+
+
+def convert_citations(answer_text, incidents_by_id):
+    """Replace [incident_id] citations with sequential [N] numbers, assigned in order
+    of first appearance. Returns (converted_text, numbers, unknown):
+      numbers  dict of incident_id -> assigned number, in citation order
+      unknown  set of cited incident_ids that weren't in incidents_by_id (the model
+               cited something that wasn't actually in the prompt)
+    """
+    numbers = {}
+    unknown = set()
+
+    def replace(match):
+        incident_id = match.group(1)
+        if incident_id not in incidents_by_id:
+            unknown.add(incident_id)
+            return "[?]"
+        numbers.setdefault(incident_id, len(numbers) + 1)
+        return f"[{numbers[incident_id]}]"
+
+    converted = CITATION_RE.sub(replace, answer_text)
+    return converted, numbers, unknown
+
+
+def build_source_list(numbers, incidents_by_id):
+    """Group cited incidents by source URL (a park's whole incident history lives on
+    one page, so several citations often share a URL), listing each one's assigned
+    number(s) and report date under its URL, so the reader can find the specific entry
+    on an otherwise undifferentiated page. Order follows first citation.
+    """
+    groups = {}  # source_url -> list of (number, date)
+    for incident_id, number in numbers.items():
+        incident = incidents_by_id[incident_id]
+        url = incident["source_url"]
+        groups.setdefault(url, []).append((number, incident["incident_date"]))
+
+    lines = ["Sources:"]
+    for url, entries in groups.items():
+        number_tags = "".join(f"[{n}]" for n, _ in entries)
+        dates = ", ".join(str(date) for _, date in entries)
+        label = "report" if len(entries) == 1 else "reports"
+        lines.append(f"{number_tags} {url} — {label} dated {dates}")
+    return "\n".join(lines)
+
+
+def main():
+    conn = get_connection()
+    try:
+        while True:
+            try:
+                question = input(
+                    "\nAsk a question about national park safety (type 'exit' or 'quit' to stop): "
+                ).strip()
+            except EOFError:
+                break
+            if question.lower() in EXIT_WORDS:
+                break
+            if not question:
+                continue
+
+            result = answer_question(conn, question)
+            incidents_by_id = {incident["incident_id"]: incident for incident in result["incidents"]}
+            converted, numbers, unknown = convert_citations(result["answer"], incidents_by_id)
+
+            print()
+            print(converted)
+            if numbers:
+                print()
+                print(build_source_list(numbers, incidents_by_id))
+            if unknown:
+                print()
+                print(f"Warning: cited incident ID(s) not in the retrieved set: {', '.join(sorted(unknown))}")
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,8 +1,11 @@
 """
 Try retrieve() with filters on questions the k=30 run showed need them.
 
+Diagnostic tool, not part of the app. Moved from src/rag_nps/ to tests/manual/ on 2026-09-21
+to separate it from application code; it no longer runs as `python -m rag_nps.filter_check`.
+
 Usage (from the project root):
-    poetry run python -m rag_nps.filter_check
+    poetry run python tests/manual/filter_check.py
 """
 
 import json

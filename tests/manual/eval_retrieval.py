@@ -2,8 +2,11 @@
 Run every test question in evals/questions.json through retrieval, print what comes back,
 and save the run to evals/output/ as JSON (full data) and Markdown (for reading and notes).
 
+Diagnostic tool, not part of the app. Moved from src/rag_nps/ to tests/manual/ on 2026-09-21
+to separate it from application code; it no longer runs as `python -m rag_nps.eval_retrieval`.
+
 Usage (from the project root):
-    poetry run python -m rag_nps.eval_retrieval
+    poetry run python tests/manual/eval_retrieval.py
 """
 
 import json

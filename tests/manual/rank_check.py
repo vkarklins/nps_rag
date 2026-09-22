@@ -5,8 +5,11 @@ For each (question, incident) pair in CHECKS, this retrieves the K_DEEP nearest 
 the question and reports the rank and distance of the incident we expected to see. It answers:
 would fetching more than 10 results (say 30) recover incidents the k=10 runs missed?
 
+Diagnostic tool, not part of the app. Moved from src/rag_nps/ to tests/manual/ on 2026-09-21
+to separate it from application code; it no longer runs as `python -m rag_nps.rank_check`.
+
 Usage (from the project root):
-    poetry run python -m rag_nps.rank_check
+    poetry run python tests/manual/rank_check.py
 """
 
 import json

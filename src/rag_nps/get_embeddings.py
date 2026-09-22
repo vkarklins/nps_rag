@@ -13,26 +13,14 @@ Usage (from the project root):
     poetry run python -m rag_nps.get_embeddings
 """
 
-import os
-from pathlib import Path
-
-from dotenv import load_dotenv
-from openai import OpenAI
 from pgvector import Vector
 from psycopg2.extras import execute_batch
 
 from rag_nps.db_connect import get_connection
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(PROJECT_ROOT / ".env")
-API_KEY = os.getenv("OPENAI_API_KEY")
+from rag_nps.openai_client import client
 
 EMBEDDING_MODEL = "text-embedding-3-small"  # 1536 dimensions, matching vector(1536)
 BATCH_SIZE = 100  # ~100 incidents is roughly 30k tokens: well under the per-request limits
-
-# The SDK retries rate-limit (429) and transient server errors with backoff; its default is
-# 2 retries, which is thin for a job that makes a couple hundred requests back to back.
-client = OpenAI(api_key=API_KEY, max_retries=5)
 
 PENDING_SQL = """
 SELECT incident_id, park_name, header_lines, body
