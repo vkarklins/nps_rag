@@ -1,6 +1,13 @@
 """
-Wire the pieces together: given a question and optional filters, retrieve incidents,
-assemble the prompt, generate an answer, and log the run.
+Wire the pieces together: given a question, route it, then either retrieve incidents and
+generate an answer, decline politely (aggregate/off_topic), or ask for clarification
+(needs_clarification). Log every run.
+
+ask() first condenses the question against the conversation so far (see
+condense.condense_question), so a follow-up like "what about in Denali?" — or a reply to
+a needs_clarification prompt — is rewritten into a standalone question before routing or
+retrieval ever see it. Conversation history itself lives outside this module (see
+history.py); ask() only reads it to condense, never stores it.
 """
 
 import json
@@ -15,21 +22,60 @@ from rag_nps.answer import (
     gap_note,
     generate_answer,
 )
+from rag_nps.condense import condense_question
+from rag_nps.parks import PARKS, park_codes_for_states
 from rag_nps.retrieval import collapse_duplicates, retrieve
+from rag_nps.router import Label, route_query
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOG_PATH = PROJECT_ROOT / "logs" / "answers.jsonl"
 
 K = 30  # candidates sent to the answer model; see retrieval eval findings for why
 
+AGGREGATE_MESSAGE = (
+    "I can't count or compare incidents across the dataset yet — I can only look up "
+    "specific reports. Try asking about specific incidents instead."
+)
+OFF_TOPIC_MESSAGE = (
+    "I'm only equipped to answer questions about safety incidents reported in U.S. "
+    "National Parks — I can't help with that here."
+)
+NO_MATCHING_PARKS_MESSAGE = (
+    "I don't have data for that location — none of the parks in this dataset match."
+)
 
-def answer_question(conn, question, *, park_codes=None, start_date=None, end_date=None):
+
+def resolve_park_codes(park_codes, states):
+    """Union router-named park codes with codes expanded from states, keeping only
+    codes that actually exist in parks.PARKS (drops anything hallucinated or
+    unrecognized)."""
+    combined = set(park_codes) | set(park_codes_for_states(states))
+    return sorted(code for code in combined if code in PARKS)
+
+
+def answer_question(
+    conn, question, *,
+    park_codes=None, start_date=None, end_date=None,
+    routing=None, raw_question=None, history_length=None,
+):
     """Retrieve incidents for `question`, generate an answer, log the run, and return it.
 
     The returned dict includes everything that's logged (see `_log`) plus `"incidents"`:
     the full collapsed incident data (id, park, date, title, source_url, body, distance),
     already fetched during retrieval, for the caller to build citations/a source list
     from without a second database query.
+
+    `routing` is the router's decision for this question (see `ask`), included in the
+    log entry for audit purposes. It plays no part in the retrieval or answer logic —
+    the filters actually used come from `park_codes`/`start_date`/`end_date` above, so
+    this function is still directly callable with explicit filters and no router at all.
+
+    `raw_question` and `history_length` are likewise logging-only, added for the
+    conversation history feature (see `ask` and condense.condense_question):
+    `raw_question` is the user's original, pre-condensing input, and `history_length` is
+    how many history entries were available when `question` was condensed from it. Both
+    default to None, so a direct caller with no conversation involved (like
+    message_check.py) just logs None for both rather than needing placeholders.
     """
     filtered = bool(park_codes or start_date or end_date)
 
@@ -51,6 +97,9 @@ def answer_question(conn, question, *, park_codes=None, start_date=None, end_dat
     log_entry = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "question": question,
+        "raw_question": raw_question,
+        "history_length": history_length,
+        "routing": routing,
         "filters": {
             "park_codes": park_codes,
             "start_date": str(start_date) if start_date else None,
@@ -67,6 +116,91 @@ def answer_question(conn, question, *, park_codes=None, start_date=None, end_dat
     _log(log_entry)
 
     return {**log_entry, "incidents": collapsed}
+
+
+def ask(conn, question, history=None):
+    """Route `question`, then either answer it, decline politely, or ask for
+    clarification. Always returns a dict with at least "answer" and "incidents"
+    (empty unless retrieval ran), so callers don't need to branch on label themselves.
+
+    `history` is the conversation so far, as built by history.append_turn() — a list of
+    {"role", "content"} exchanges. It's used only to condense `question` into a
+    standalone one (see condense.condense_question) before routing or retrieval ever
+    see it; `ask` doesn't store or update history itself, that's the caller's job.
+    Defaults to an empty conversation, which skips condensing entirely.
+    """
+    history = history or []
+    history_length = len(history)
+    condensed_question = condense_question(question, history)
+
+    router_output = route_query(condensed_question)
+    routing = {
+        "label": router_output.label,
+        "reason": router_output.reason,
+        "park_codes": router_output.park_codes,
+        "states": router_output.states,
+        "start_date": router_output.start_date,
+        "end_date": router_output.end_date,
+    }
+
+    if router_output.label == Label.RETRIEVAL:
+        requested_location = bool(router_output.park_codes or router_output.states)
+        park_codes = resolve_park_codes(router_output.park_codes, router_output.states)
+
+        if requested_location and not park_codes:
+            # The router named a park or state, but none of it resolved to a park in
+            # this dataset (e.g. a state with no national park here). retrieve()
+            # treats an empty park_codes list as "no filter", so without this check
+            # we'd silently search the whole dataset instead of correctly finding
+            # nothing.
+            return _log_decision(
+                condensed_question, routing, NO_MATCHING_PARKS_MESSAGE,
+                raw_question=question, history_length=history_length,
+            )
+
+        return answer_question(
+            conn, condensed_question,
+            park_codes=park_codes or None,
+            start_date=router_output.start_date,
+            end_date=router_output.end_date,
+            routing=routing,
+            raw_question=question,
+            history_length=history_length,
+        )
+
+    match router_output.label:
+        case Label.AGGREGATE:
+            answer = AGGREGATE_MESSAGE
+        case Label.OFF_TOPIC:
+            answer = OFF_TOPIC_MESSAGE
+        case Label.NEEDS_CLARIFICATION:
+            answer = router_output.clarifying_question
+        case _:
+            raise ValueError(f"Unhandled router label: {router_output.label!r}")
+
+    return _log_decision(
+        condensed_question, routing, answer,
+        raw_question=question, history_length=history_length,
+    )
+
+
+def _log_decision(question, routing, answer, *, raw_question=None, history_length=None):
+    """Log a run that never reached retrieval (aggregate/off_topic/needs_clarification,
+    or a retrieval request whose location didn't resolve to any known park), and return
+    it in the same shape `answer_question` returns, with no incidents.
+
+    `raw_question` and `history_length` are logging-only, same as in `answer_question`.
+    """
+    log_entry = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "question": question,
+        "raw_question": raw_question,
+        "history_length": history_length,
+        "routing": routing,
+        "answer": answer,
+    }
+    _log(log_entry)
+    return {**log_entry, "incidents": []}
 
 
 def _log(result):

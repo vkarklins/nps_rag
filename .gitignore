@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 evals/output/
 logs/
+evals/conversations.md

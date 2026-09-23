@@ -79,3 +79,13 @@ def park_codes_for_states(states):
     """Return the sorted park codes for parks that touch any of the given state codes."""
     wanted = set(states)
     return sorted(code for code, park in PARKS.items() if wanted & set(park["states"]))
+
+
+def format_park_table():
+    """Build the 'code — name (states)' lines used in the router's system prompt."""
+    lines = []
+    for code in sorted(PARKS):
+        info = PARKS[code]
+        states = ", ".join(info["states"])
+        lines.append(f"{code} — {info['name']} ({states})")
+    return "\n".join(lines)

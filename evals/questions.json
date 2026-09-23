@@ -366,5 +366,37 @@
     "expected_label": null,
     "stresses": "Borderline: 'unusual' and 'rare' are not something embeddings capture well, and 'rare' implies comparing against everything else.",
     "notes": "Policy undecided."
+  },
+  {
+    "id": "q47",
+    "question": "Were there any lightning strike incidents at Rocky Mountain National Park in 2015?",
+    "tier": null,
+    "expected_label": "retrieval",
+    "stresses": "Yes/no existence phrasing ('were there any') combined with a park and year - should stay retrieval, not get pulled toward aggregate just because it also has filterable fields attached.",
+    "notes": "Regression test for the aggregate/retrieval boundary bug fixed 2026-09-22 (see ROUTER_SYSTEM_PROMPT's own 'were there any drownings...' example) - phrased with a different park and topic so this checks that the fix generalized rather than just matching the literal example baked into the prompt."
+  },
+  {
+    "id": "q48",
+    "question": "What was Operation Rockcut, the undercover investigation into reptile poaching at Big Bend National Park?",
+    "tier": null,
+    "expected_label": "retrieval",
+    "stresses": "Administrative/law-enforcement phrasing ('undercover investigation', 'operation') for a real incident category (poaching) can get misread as off_topic even though it's squarely in the dataset.",
+    "notes": "Regression test for the router bug found 2026-09-22 via real conversation-history testing: this exact question, as a condensed follow-up, was misrouted to off_topic before the ROUTER_SYSTEM_PROMPT fix broadening the retrieval definition to cover enforcement/investigation framing."
+  },
+  {
+    "id": "q49",
+    "question": "Where have rattlesnakes been encountered in national parks?",
+    "tier": null,
+    "expected_label": "retrieval",
+    "stresses": "A clear topic with no park named. Should run as an unfiltered search across all parks, not get treated as needing clarification.",
+    "notes": "Regression test for the router bug found 2026-09-22: this exact question was misrouted to needs_clarification before the fix, and a follow-up rephrasing of it was then misrouted to off_topic."
+  },
+  {
+    "id": "q50",
+    "question": "Tell me about overheating incidents.",
+    "tier": null,
+    "expected_label": "retrieval",
+    "stresses": "Same pattern as q49 (topic with no park) with a terser, more generic phrasing - tests whether the fix holds on a shorter question with even less to anchor on.",
+    "notes": "Regression test for the same 2026-09-22 router bug (topic-with-no-park misrouted to needs_clarification), observed with this exact phrasing during real conversation-history testing."
   }
 ]

@@ -24,8 +24,14 @@ Rules:
 statistics.
 2. After every claim, cite the report that supports it by its incident ID in square \
 brackets, like [yose-00571]. Do not state a fact without a citation.
-3. Use only the reports that actually answer the question. If none of them describe what \
-was asked, say so plainly. Do not stretch a loosely related report into an answer.
+3. Use only the reports that actually answer the question, and represent each one \
+accurately. A report can be topically similar without answering the question - a \
+different animal, a different park feature, a different kind of incident - so check the \
+specific detail asked about, not just the general subject. If a report describes \
+something different from what was asked (for example, a mountain lion attack when the \
+question asked about bear attacks), do not present it as an example of what was asked. \
+If none of the reports describe what was asked, say so plainly. See the second example \
+below for how to handle a topically similar but wrong report.
 4. A report titled "Follow-up on Previously Reported Incident" (or similar) carries little \
 detail and is not evidence that a new event happened. Do not count it as an incident.
 5. Do not count or estimate beyond what the reports state. Several reports can describe the \
@@ -40,9 +46,39 @@ in the dataset.
 whether the results are complete, and any known gap in the data. Follow them, and mention \
 them in your answer when they affect how far it can be trusted.
 9. If the question asks for a total, ranking or comparison across the whole dataset (for \
-example "how many people died..."), say that you can only see a sample of reports and \
-cannot give a reliable total. You may still describe the reports you have.
-10. Keep the answer short: lead with the direct answer, then the supporting details.
+example "how many people died..."), or about the scale or frequency of something (for \
+example "were there many poaching incidents", "is this common"), say that you can only see \
+a sample of reports and cannot give a reliable total or say how common something is. Do \
+not characterize how much or how often something occurs — words like "numerous", "a \
+significant issue", or "rare" — beyond what the sample actually shows. You may still \
+describe the specific reports you have.
+10. Write the answer as flowing prose in one or two short paragraphs, not a list of \
+each retrieved incident in turn. Synthesize across the reports rather than summarizing \
+them one by one, and place each incident's citation immediately after the specific \
+claim it supports - not bunched together at the end of a sentence. Lead with the \
+direct answer, then enough supporting detail to back it up. See the first example below \
+for the expected style.
+
+First example, citing multiple relevant reports in flowing prose (illustrative only - \
+"Example National Park" and these incident IDs are not real):
+
+Question: What kinds of wildlife encounters have been reported in Example National Park?
+
+Answer: Visitors have encountered wildlife in several ways. A hiker was charged by a \
+moose near a trailhead in 2019 [expl-00012], and in a separate incident a camper's food \
+was raided by a black bear that had become habituated to visitors [expl-00045]. There \
+was also a report of a bison goring a visitor who approached too closely for a photo \
+[expl-00078]. These are the closest matches to the question, not a complete list.
+
+Second example, correctly declining when a report is topically similar but wrong \
+(illustrative only):
+
+Question: What can you tell me about wolf attacks in Example National Park?
+
+Answer: The dataset does not contain any reports of wolf attacks in Example National \
+Park. The closest related incident is a coyote bite reported in 2021, but that involves \
+a different species and does not answer this question [expl-00099]. No information \
+about wolf attacks in this park can be provided from the available reports.
 """
 
 

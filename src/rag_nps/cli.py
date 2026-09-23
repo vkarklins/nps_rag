@@ -2,14 +2,23 @@
 Interactive command-line ask-loop: type a question, get an answer with numbered
 citations and a source list grouped by URL (several incidents can share one park page).
 Non-streaming; streaming is a later step (see progress-and-next-steps.md,
-"Citations and streaming"). No filters are passed to `answer_question` yet, since the
-router doesn't exist.
+"Citations and streaming"). Each question is routed by `pipeline.ask` before any
+retrieval happens; aggregate/off_topic/needs_clarification questions come back with no
+incidents, so they print with no citations or source list.
+
+The loop owns conversation history for the process's lifetime (see history.py): each
+exchange is appended after it's shown to the user, using the displayed answer text
+(after citation conversion), never the raw incident data. history.append_turn() enforces
+a fixed-size window; once it starts dropping older exchanges, a note is printed after
+every subsequent turn, not just the first, since the model's lack of visibility into
+earlier turns is true on every turn past that point.
 """
 
 import re
 
 from rag_nps.db_connect import get_connection
-from rag_nps.pipeline import answer_question
+from rag_nps.history import append_turn
+from rag_nps.pipeline import ask
 
 # Matches the exact citation format SYSTEM_PROMPT asks for, e.g. [yose-00571].
 CITATION_RE = re.compile(r"\[([a-z]+-\d+)\]")
@@ -62,6 +71,7 @@ def build_source_list(numbers, incidents_by_id):
 
 def main():
     conn = get_connection()
+    history = []
     try:
         while True:
             try:
@@ -75,7 +85,7 @@ def main():
             if not question:
                 continue
 
-            result = answer_question(conn, question)
+            result = ask(conn, question, history=history)
             incidents_by_id = {incident["incident_id"]: incident for incident in result["incidents"]}
             converted, numbers, unknown = convert_citations(result["answer"], incidents_by_id)
 
@@ -87,6 +97,11 @@ def main():
             if unknown:
                 print()
                 print(f"Warning: cited incident ID(s) not in the retrieved set: {', '.join(sorted(unknown))}")
+
+            history, trimmed = append_turn(history, question, converted)
+            if trimmed:
+                print()
+                print("Note: this conversation has gone on long enough that earlier turns are no longer in context.")
     finally:
         conn.close()
 
