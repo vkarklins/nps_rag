@@ -21,6 +21,7 @@ from rag_nps.answer import (
     describe_filters,
     gap_note,
     generate_answer,
+    is_complete,
 )
 from rag_nps.condense import condense_question
 from rag_nps.parks import PARKS, park_codes_for_states
@@ -113,6 +114,7 @@ def answer_question(
         "retrieved": [{"incident_id": r["incident_id"], "distance": r["distance"]} for r in results],
         "n_retrieved": len(results),
         "n_after_collapse": len(collapsed),
+        "complete": is_complete(len(results), K, filtered),
         "notes": notes,
         "prompt": user_message,
         "answer": answer,

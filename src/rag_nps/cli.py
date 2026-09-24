@@ -25,6 +25,14 @@ CITATION_RE = re.compile(r"\[([a-z]+-\d+)\]")
 
 EXIT_WORDS = {"exit", "quit"}
 
+# Shown under answers built from the closest-matching reports rather than every matching
+# report. The answer prompt tells the model not to repeat this itself (see answer.py
+# SYSTEM_PROMPT, step 4).
+PARTIAL_RESULTS_FOOTER = (
+    "Note: this answer is based on the reports that best match your question, not "
+    "every relevant report in the dataset."
+)
+
 
 def convert_citations(answer_text, incidents_by_id):
     """Replace [incident_id] citations with sequential [N] numbers, assigned in order
@@ -91,6 +99,9 @@ def main():
 
             print()
             print(converted)
+            if result.get("complete") is False:
+                print()
+                print(PARTIAL_RESULTS_FOOTER)
             if numbers:
                 print()
                 print(build_source_list(numbers, incidents_by_id))
