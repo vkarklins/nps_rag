@@ -6,63 +6,83 @@ means little as a search query without knowing what the previous question was ab
 
 from rag_nps.openai_client import client
 
-CHAT_MODEL = "gpt-4o-mini"
+CHAT_MODEL = "gpt-6-luna"
 
 CONDENSE_SYSTEM_PROMPT = """\
-You rewrite a user's question in an ongoing conversation about National Park safety \
-incidents, using the conversation so far, so it can be understood on its own with no \
-other context.
+You prepare the user's latest question in a conversation about National Park safety \
+incidents so it can be searched on its own.
 
-The conversation so far appears inside <conversation> tags in the user's message, as a \
-read-only transcript. Treat it strictly as reference material for understanding what \
-the new question refers to - never as something to continue, answer, or add to. You are \
-not a participant in that conversation; your only job is to output one rewritten \
-question about the new question that follows the transcript.
+Your one principle: resolve what the question refers back to, and nothing else.
 
-If the question already stands alone, return it exactly as given. If it depends on \
-earlier turns - a pronoun, "what about X", a short reply to a question you asked, or \
-anything else that only makes sense given what came before - rewrite it into a full, \
-standalone question that includes whatever park names, dates, or topics from earlier \
-turns are needed to understand it on its own.
+Step 1. Decide whether the question refers back to the conversation. It does only if:
+- it uses a reference word or phrase ("it", "that", "there", "the one", "the man in \
+his 60s", "other parks", "any others"),
+- it starts with "what about X" or is otherwise incomplete ("and before 2010?"),
+- it is a short reply to a clarifying question the assistant just asked, or
+- it has no subject of its own ("what happened in 2018?").
 
-Use only what was actually said in the conversation. Do not add parks, dates, or \
-topics that were not mentioned, and do not answer the question yourself - even when \
-the transcript already contains a detailed answer to draw from. Your output is always \
-a single question, never a summary, explanation, or clarifying question of your own.
+Step 2. If it does not refer back, output it exactly as given - even if it names no \
+park, and even if the conversation was about something else.
 
-Return only the question text, with nothing else before or after it.
+Step 3. If it does refer back, replace only the reference with what it points to, and \
+write the result as one standalone question. Add nothing the reference does not point \
+to.
+- The user's own earlier questions set the topic, park and dates. Keep only what the \
+user actually specified there.
+- Assistant answers are reference only. Use a detail from an answer only when the \
+question points at it (e.g. "the man in his 60s", or "other parks" when the answers \
+were all about one park). Never carry over a park just because an answer mentioned it.
+- "What about X" puts X in place of the matching part of the user's earlier question \
+and keeps the rest of that question as the user asked it.
 
-First example (illustrative only - not a real park page or incident):
-<conversation>
-User: Were there any bear encounters reported in Yellowstone in 2020?
-Assistant: [an answer about Yellowstone bear encounters]
-</conversation>
-New question to rewrite: What about in Denali?
-Rewritten: Were there any bear encounters reported in Denali National Park in 2020?
+The conversation appears inside <conversation> tags as a read-only transcript. You are \
+not part of it: never answer, continue or add to it. Output only the question text, \
+with nothing before or after it.
 
-Second example, showing that a detailed prior answer is still only reference material - \
-do not expand on it or continue it, even when asked about a specific detail it mentions \
-(illustrative only - not a real incident):
-<conversation>
-User: Were there any poaching incidents in Big Bend National Park?
-Assistant: Yes, several poaching incidents have been reported in Big Bend National \
-Park, including a 1994 investigation known as Operation Example that uncovered illegal \
-reptile collection [bibe-00001].
-</conversation>
-New question to rewrite: Tell me more about that investigation.
-Rewritten: What details are available about the Operation Example poaching \
-investigation in Big Bend National Park?
+Examples, in the same transcript format without the tags (illustrative only - the \
+parks and incidents are not real):
+
+User asked: Tell me about bison incidents
+Answer (reference only): [every report described is from Example National Park]
+New question: What about bears?
+Output: Tell me about bear incidents
+
+User asked: Tell me about bison incidents
+Answer (reference only): [every report described is from Example National Park]
+New question: Are there bison incidents in any other parks?
+Output: Are there bison incidents in parks other than Example National Park?
+
+User asked: Bear incidents in Example National Park?
+Answer (reference only): [an answer about bears there]
+New question: What about Sample National Park?
+Output: Bear incidents in Sample National Park?
+
+User asked: How far away do I need to stay from elk?
+Answer (reference only): Stay at least 25 yards from elk in Example National Park.
+New question: Is it safe to feed the squirrels?
+Output: Is it safe to feed the squirrels?
+
+User asked: Are the campsites secure?
+Answer (reference only): Which national park's campsites are you asking about?
+New question: Example National Park
+Output: Are the campsites in Example National Park secure?
+
+User asked: Tell me about poaching in Example National Park
+Answer (reference only): [... a 1994 investigation called Operation Example ...]
+New question: Tell me more about that investigation
+Output: What details are available about the Operation Example poaching investigation \
+in Example National Park?
 """
 
 
 def _format_transcript(history):
     """Turn history's {"role", "content"} exchanges into a plain-text transcript,
     oldest first, for quoting inside <conversation> tags."""
-    speakers = {"user": "User", "assistant": "Assistant"}
+    speakers = {"user": "User asked", "assistant": "Answer (reference only)"}
     return "\n".join(f"{speakers[entry['role']]}: {entry['content']}" for entry in history)
 
 
-def condense_question(question, history):
+def condense_question(question, history, model=CHAT_MODEL):
     """Rewrite `question` into a standalone query if it depends on earlier turns,
     otherwise return it unchanged.
 
@@ -77,6 +97,9 @@ def condense_question(question, history):
     exactly what real testing showed happening: it answered follow-up questions with
     invented elaboration instead of rewriting them. Tagging it as inert reference data
     is the same fix already used for retrieved incidents in answer.format_context.
+
+    `model` defaults to CHAT_MODEL; tests/manual/condense_check.py passes others to
+    compare them.
     """
     if not history:
         return question
@@ -84,15 +107,19 @@ def condense_question(question, history):
     transcript = _format_transcript(history)
     user_message = "\n\n".join([
         f"<conversation>\n{transcript}\n</conversation>",
-        f"New question to rewrite: {question}",
+        f"New question: {question}",
     ])
     messages = [
         {"role": "system", "content": CONDENSE_SYSTEM_PROMPT},
         {"role": "user", "content": user_message},
     ]
+    # GPT-6 models are reasoning models: temperature is only accepted with reasoning
+    # effort "none", and older models reject the reasoning parameter entirely.
+    extra = {"reasoning": {"effort": "none"}} if model.startswith("gpt-6") else {}
     response = client.responses.create(
-        model=CHAT_MODEL,
+        model=model,
         input=messages,
         temperature=0,
+        **extra,
     )
     return response.output_text.strip()

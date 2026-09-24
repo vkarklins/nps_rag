@@ -39,9 +39,13 @@ same event; count that event once. Do not state a cause or outcome more firmly t
 report does (for example, do not call a possible or suspected cause confirmed).
 6. "Report date" is the date the report was written, not necessarily the date of the event. \
 Say "reported in 2019", never "happened in 2019".
-7. The dataset holds only part of all reports. Never say or imply that something did not \
-happen, or that a park is safe, because no report was found. Say that no report was found \
-in the dataset.
+7. The dataset holds only part of all reports, and a search returns only some of those. \
+Never say or imply that something did not happen, or that a park is safe, because no \
+report was found. When no relevant report was found, word it to match the completeness \
+note: if the note says these are the closest matches, not a complete list, say that you \
+couldn't find any reports of it - never that none exist or that the data contains none. \
+Only if the note says the search returned every matching report may you say more firmly \
+that there are no reports of it for the parks and dates searched.
 8. The user's message begins with notes about the search: which filters were applied, \
 whether the results are complete, and any known gap in the data. Follow them, and mention \
 them in your answer when they affect how far it can be trusted.
@@ -52,33 +56,34 @@ a sample of reports and cannot give a reliable total or say how common something
 not characterize how much or how often something occurs — words like "numerous", "a \
 significant issue", or "rare" — beyond what the sample actually shows. You may still \
 describe the specific reports you have.
-10. Write the answer as flowing prose in one or two short paragraphs, not a list of \
-each retrieved incident in turn. Synthesize across the reports rather than summarizing \
-them one by one, and place each incident's citation immediately after the specific \
-claim it supports - not bunched together at the end of a sentence. Lead with the \
-direct answer, then enough supporting detail to back it up. See the first example below \
-for the expected style.
+10. Write the answer as flowing prose in one to three short paragraphs, not a list of \
+each retrieved incident in turn. Lead with the direct answer. Prefer describing fewer \
+incidents well over naming many in passing: for each incident you describe, include the \
+concrete details that matter for safety - what the person was doing, what happened, and \
+the outcome (for example, that bear spray was used, the temperature, or how close they \
+got) - and cite it immediately after that description, not grouped with other \
+citations. See the first example below for the expected style.
 
 First example, citing multiple relevant reports in flowing prose (illustrative only - \
 "Example National Park" and these incident IDs are not real):
 
 Question: What kinds of wildlife encounters have been reported in Example National Park?
 
-Answer: Visitors have encountered wildlife in several ways. A hiker was charged by a \
-moose near a trailhead in 2019 [expl-00012], and in a separate incident a camper's food \
-was raided by a black bear that had become habituated to visitors [expl-00045]. There \
-was also a report of a bison goring a visitor who approached too closely for a photo \
-[expl-00078]. These are the closest matches to the question, not a complete list.
+Answer: Visitors have been hurt in several close encounters with wildlife. A hiker who \
+surprised a moose near a trailhead in 2019 was charged and knocked down, and was treated \
+for bruises [expl-00012]. In a separate report, a black bear that had become used to \
+human food tore into a camper's cooler at night and was later relocated [expl-00045]. \
+A visitor who walked to within 10 feet of a bison to take a photo was gored in the leg \
+and flown to a hospital [expl-00078].
 
 Second example, correctly declining when a report is topically similar but wrong \
 (illustrative only):
 
 Question: What can you tell me about wolf attacks in Example National Park?
 
-Answer: The dataset does not contain any reports of wolf attacks in Example National \
-Park. The closest related incident is a coyote bite reported in 2021, but that involves \
-a different species and does not answer this question [expl-00099]. No information \
-about wolf attacks in this park can be provided from the available reports.
+Answer: I couldn't find any reports of wolf attacks in Example National Park. The \
+closest related incident is a coyote bite reported in 2021, but that involves a \
+different species and does not answer this question [expl-00099].
 """
 
 
@@ -127,12 +132,23 @@ def completeness_note(n_retrieved, k, filtered):
     )
 
 
-def describe_filters(park_codes=None, start_date=None, end_date=None):
-    """Say in words which filters were applied to the search."""
+def describe_filters(park_codes=None, start_date=None, end_date=None, *,
+                     exclude_park_codes=None):
+    """Say in words which filters were applied to the search.
+
+    Describes the parks actually searched. With an include list, excluded parks are
+    dropped from it before it's named, since the exclusion then adds nothing more to
+    say. With no include list, the excluded parks are named as left out of an
+    all-parks search.
+    """
     parts = []
+    excluded = set(exclude_park_codes or [])
     if park_codes:
-        names = ", ".join(PARKS[code]["name"] for code in park_codes)
+        names = ", ".join(PARKS[code]["name"] for code in park_codes if code not in excluded)
         parts.append(f"only these parks were searched: {names}")
+    elif excluded:
+        names = ", ".join(PARKS[code]["name"] for code in sorted(excluded))
+        parts.append(f"all parks were searched except: {names}")
     if start_date and end_date:
         parts.append(f"only reports dated {start_date} to {end_date} were searched")
     elif start_date:
@@ -194,18 +210,23 @@ def build_user_message(question, incidents, notes, gap_warning=None):
     return "\n\n".join(parts)
 
 
-CHAT_MODEL = "gpt-4o-mini"
+CHAT_MODEL = "gpt-6-luna"
 
 
-def generate_answer(system_prompt, user_message):
-    """Call the chat model and return its answer text."""
+def generate_answer(system_prompt, user_message, model=CHAT_MODEL):
+    """Call the chat model and return its answer text. `model` defaults to CHAT_MODEL;
+    tests/manual/answer_check.py passes others to compare them."""
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_message},
     ]
+    # GPT-6 models are reasoning models: temperature is only accepted with reasoning
+    # effort "none", and older models reject the reasoning parameter entirely.
+    extra = {"reasoning": {"effort": "none"}} if model.startswith("gpt-6") else {}
     response = client.responses.create(
-        model=CHAT_MODEL,
+        model=model,
         input=messages,
         temperature=0,
+        **extra,
     )
     return response.output_text

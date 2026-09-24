@@ -23,6 +23,10 @@ CASES = [
     ("q27", {"park_codes": ["YOSE"]}),
     ("q39", {"park_codes": ["GRCA"], "start_date": "2018-01-01", "end_date": "2018-12-31"}),
     ("q13", {"park_codes": ["YELL"], "start_date": "2019-01-01", "end_date": "2019-12-31"}),
+    # Exclusion: expect no YELL rows (unfiltered, q27 pulls in many Yellowstone results).
+    ("q27", {"exclude_park_codes": ["YELL"]}),
+    # A park in both lists is excluded: expect only YOSE rows.
+    ("q27", {"park_codes": ["YOSE", "YELL"], "exclude_park_codes": ["YELL"]}),
 ]
 
 

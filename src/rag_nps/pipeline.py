@@ -46,16 +46,16 @@ NO_MATCHING_PARKS_MESSAGE = (
 
 
 def resolve_park_codes(park_codes, states):
-    """Union router-named park codes with codes expanded from states, keeping only
-    codes that actually exist in parks.PARKS (drops anything hallucinated or
-    unrecognized)."""
+    """Union park codes with codes expanded from states, keeping only codes that
+    actually exist in parks.PARKS (drops anything hallucinated or unrecognized).
+    Used for both the router's include fields and its exclude fields."""
     combined = set(park_codes) | set(park_codes_for_states(states))
     return sorted(code for code in combined if code in PARKS)
 
 
 def answer_question(
     conn, question, *,
-    park_codes=None, start_date=None, end_date=None,
+    park_codes=None, exclude_park_codes=None, start_date=None, end_date=None,
     routing=None, raw_question=None, history_length=None,
 ):
     """Retrieve incidents for `question`, generate an answer, log the run, and return it.
@@ -67,8 +67,9 @@ def answer_question(
 
     `routing` is the router's decision for this question (see `ask`), included in the
     log entry for audit purposes. It plays no part in the retrieval or answer logic —
-    the filters actually used come from `park_codes`/`start_date`/`end_date` above, so
-    this function is still directly callable with explicit filters and no router at all.
+    the filters actually used come from `park_codes`/`exclude_park_codes`/`start_date`/
+    `end_date` above, so this function is still directly callable with explicit filters
+    and no router at all.
 
     `raw_question` and `history_length` are likewise logging-only, added for the
     conversation history feature (see `ask` and condense.condense_question):
@@ -77,17 +78,19 @@ def answer_question(
     default to None, so a direct caller with no conversation involved (like
     message_check.py) just logs None for both rather than needing placeholders.
     """
-    filtered = bool(park_codes or start_date or end_date)
+    filtered = bool(park_codes or exclude_park_codes or start_date or end_date)
 
     results = retrieve(
         conn, question, k=K,
-        park_codes=park_codes, start_date=start_date, end_date=end_date,
+        park_codes=park_codes, exclude_park_codes=exclude_park_codes,
+        start_date=start_date, end_date=end_date,
     )
     collapsed = collapse_duplicates(results)
 
     gap = gap_note(start_date, end_date)
     notes = [
-        describe_filters(park_codes, start_date, end_date),
+        describe_filters(park_codes, start_date, end_date,
+                         exclude_park_codes=exclude_park_codes),
         completeness_note(len(results), K, filtered),
         gap,
     ]
@@ -102,6 +105,7 @@ def answer_question(
         "routing": routing,
         "filters": {
             "park_codes": park_codes,
+            "exclude_park_codes": exclude_park_codes,
             "start_date": str(start_date) if start_date else None,
             "end_date": str(end_date) if end_date else None,
         },
@@ -139,6 +143,8 @@ def ask(conn, question, history=None):
         "reason": router_output.reason,
         "park_codes": router_output.park_codes,
         "states": router_output.states,
+        "exclude_park_codes": router_output.exclude_park_codes,
+        "exclude_states": router_output.exclude_states,
         "start_date": router_output.start_date,
         "end_date": router_output.end_date,
     }
@@ -146,13 +152,21 @@ def ask(conn, question, history=None):
     if router_output.label == Label.RETRIEVAL:
         requested_location = bool(router_output.park_codes or router_output.states)
         park_codes = resolve_park_codes(router_output.park_codes, router_output.states)
+        exclude_park_codes = resolve_park_codes(
+            router_output.exclude_park_codes, router_output.exclude_states
+        )
+        searchable = [code for code in park_codes if code not in exclude_park_codes]
 
-        if requested_location and not park_codes:
-            # The router named a park or state, but none of it resolved to a park in
-            # this dataset (e.g. a state with no national park here). retrieve()
-            # treats an empty park_codes list as "no filter", so without this check
-            # we'd silently search the whole dataset instead of correctly finding
-            # nothing.
+        if requested_location and not searchable:
+            # The router named a park or state to search, but nothing is left to
+            # search: either none of it resolved to a park in this dataset (e.g. a
+            # state with no national park here), or every park it resolved to was
+            # also excluded (e.g. "Death Valley but no California parks": Death Valley
+            # touches California, so it is excluded too). retrieve() treats an empty
+            # park_codes list as "no filter", so without this check we'd silently
+            # search the whole dataset instead.
+            # requested_location looks only at the include fields on purpose: an
+            # exclusion on its own ("everywhere except Yellowstone") is a normal search.
             return _log_decision(
                 condensed_question, routing, NO_MATCHING_PARKS_MESSAGE,
                 raw_question=question, history_length=history_length,
@@ -161,6 +175,7 @@ def ask(conn, question, history=None):
         return answer_question(
             conn, condensed_question,
             park_codes=park_codes or None,
+            exclude_park_codes=exclude_park_codes or None,
             start_date=router_output.start_date,
             end_date=router_output.end_date,
             routing=routing,

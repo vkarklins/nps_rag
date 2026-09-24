@@ -3,11 +3,12 @@ route_query() classifies a user's question and extracts search filters, in one L
 before any retrieval happens.
 
 It returns a RouterOutput: a label (retrieval / aggregate / off_topic / needs_clarification),
-a one-sentence reason for logging, any park codes or states named in the question, an
-optional ISO date range, and — only for needs_clarification — a clarifying question to show
-the user. park_codes and states are returned separately: the caller is expected to expand
-states through parks.park_codes_for_states() and union the result with park_codes before
-passing filters to retrieval.retrieve().
+a one-sentence reason for logging, any park codes or states named in the question, any
+park codes or states it asks to exclude, an optional ISO date range, and — only for
+needs_clarification — a clarifying question to show the user. park_codes and states are
+returned separately: the caller is expected to expand states through
+parks.park_codes_for_states() and union the result with park_codes before passing filters
+to retrieval.retrieve().
 """
 
 from enum import Enum
@@ -32,6 +33,8 @@ class RouterOutput(BaseModel):
     reason: str
     park_codes: list[str]
     states: list[str]
+    exclude_park_codes: list[str]
+    exclude_states: list[str]
     start_date: str | None
     end_date: str | None
     clarifying_question: str | None
@@ -82,6 +85,13 @@ more specific named parks. Do not add a state just because a park already listed
 park_codes happens to sit in it — states triggers an app-side expansion to every park \
 touching that state, which would wrongly broaden a question about one specific park. \
 Return the state itself — do not resolve it to park codes yourself.
+- exclude_park_codes / exclude_states: parks or states the question explicitly asks to \
+leave out (e.g. "other than Yellowstone", "outside California", "not in Utah"), following \
+the same rules as park_codes and states: codes only from the table below, and states only \
+for a state as a whole. A place named only to be excluded must NOT also appear in \
+park_codes or states. These fields are for places only - never use them to exclude a \
+hazard or topic (e.g. "hikes without flash flood risk" excludes nothing). Leave both \
+empty unless the question explicitly excludes a place.
 - start_date / end_date: an ISO date range if one is specified (a bare year like "2019" \
 becomes 2019-01-01 through 2019-12-31). Leave both null otherwise.
 
@@ -105,6 +115,10 @@ Example: "where have rattlesnakes been encountered" → retrieval, not \
 needs_clarification, with park_codes: [] and states: [] — an unfiltered search across \
 every park. The topic (rattlesnake encounters) is enough on its own; no park needs to \
 be named.
+
+Example: "have there been bison incidents in parks other than Yellowstone" → \
+retrieval, park_codes: [], exclude_park_codes: ["YELL"] — Yellowstone is named only to \
+be left out, so it must not also go in park_codes.
 
 Known parks (code — name — state(s)):
 {format_park_table()}
