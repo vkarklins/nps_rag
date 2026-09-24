@@ -267,24 +267,24 @@
     "id": "q34",
     "question": "How often do search-and-rescue operations happen in Zion?",
     "tier": null,
-    "expected_label": "aggregate",
-    "stresses": "Decline behavior: the app should say it cannot count from a sample of incidents.",
+    "expected_label": "retrieval",
+    "stresses": "Comparison/frequency question: since 2026-09-23 routed to retrieval (aggregate is only for a number or ranking). The answer must say it can't compare or say how often from a sample, then describe reports. (Was: Decline behavior: the app should say it cannot count from a sample of incidents.)",
     "notes": "Would need: count incidents by park and year (SQL), after classifying which incidents are search and rescue."
   },
   {
     "id": "q35",
     "question": "Do search-and-rescue calls spike during particular seasons?",
     "tier": null,
-    "expected_label": "aggregate",
-    "stresses": "Decline behavior.",
+    "expected_label": "retrieval",
+    "stresses": "Comparison/frequency question: since 2026-09-23 routed to retrieval (aggregate is only for a number or ranking). The answer must say it can't compare or say how often from a sample, then describe reports. (Was: Decline behavior.)",
     "notes": "Would need: group-by month or season (SQL), after classifying search-and-rescue incidents."
   },
   {
     "id": "q36",
     "question": "Is it more dangerous to visit Denali in winter or summer?",
     "tier": null,
-    "expected_label": "aggregate",
-    "stresses": "Decline behavior: comparison across seasons.",
+    "expected_label": "retrieval",
+    "stresses": "Comparison/frequency question: since 2026-09-23 routed to retrieval (aggregate is only for a number or ranking). The answer must say it can't compare or say how often from a sample, then describe reports. (Was: Decline behavior: comparison across seasons.)",
     "notes": "Would need: incident counts by season plus visitation by season (external data) to get a rate. Raw counts alone would mislead."
   },
   {
@@ -299,8 +299,8 @@
     "id": "q38",
     "question": "Do incidents differ between backcountry campers and day hikers?",
     "tier": null,
-    "expected_label": "aggregate",
-    "stresses": "Decline behavior: comparison across categories.",
+    "expected_label": "retrieval",
+    "stresses": "Comparison/frequency question: since 2026-09-23 routed to retrieval (aggregate is only for a number or ranking). The answer must say it can't compare or say how often from a sample, then describe reports. (Was: Decline behavior: comparison across categories.)",
     "notes": "Would need: an LLM tagging pass to classify each incident by visitor type, then counts (SQL)."
   },
   {
@@ -347,25 +347,25 @@
     "id": "q44",
     "question": "What's the best time of year to visit Yosemite?",
     "tier": null,
-    "expected_label": null,
+    "expected_label": "retrieval",
     "stresses": "Borderline: about a park but not about safety incidents.",
-    "notes": "Policy undecided. If the router lets it through, the answer step should say the incidents do not support an answer."
+    "notes": "Policy decided 2026-09-23: retrieval, per the borderline policy (route safety-adjacent questions to retrieval). If the router lets it through, the answer step should say the incidents do not support an answer."
   },
   {
     "id": "q45",
     "question": "Is Glacier National Park dangerous?",
     "tier": null,
-    "expected_label": null,
+    "expected_label": "retrieval",
     "stresses": "Borderline: in scope in spirit but too vague to retrieve on, and 'dangerous' invites a judgment the data cannot support.",
-    "notes": "Policy undecided."
+    "notes": "Policy decided 2026-09-23: retrieval, per the borderline policy (route safety-adjacent questions to retrieval)."
   },
   {
     "id": "q46",
     "question": "What's an unusual or rare incident documented in Yellowstone's history?",
     "tier": null,
-    "expected_label": null,
+    "expected_label": "retrieval",
     "stresses": "Borderline: 'unusual' and 'rare' are not something embeddings capture well, and 'rare' implies comparing against everything else.",
-    "notes": "Policy undecided."
+    "notes": "Policy decided 2026-09-23: retrieval, per the borderline policy (route safety-adjacent questions to retrieval)."
   },
   {
     "id": "q47",
@@ -398,5 +398,21 @@
     "expected_label": "retrieval",
     "stresses": "Same pattern as q49 (topic with no park) with a terser, more generic phrasing - tests whether the fix holds on a shorter question with even less to anchor on.",
     "notes": "Regression test for the same 2026-09-22 router bug (topic-with-no-park misrouted to needs_clarification), observed with this exact phrasing during real conversation-history testing."
+  },
+  {
+    "id": "q51",
+    "question": "Which national park has had the most search-and-rescue operations?",
+    "tier": null,
+    "expected_label": "aggregate",
+    "stresses": "Ranking ('the most'): stays aggregate under the narrow policy. Decline behavior.",
+    "notes": ""
+  },
+  {
+    "id": "q52",
+    "question": "How many bison gorings have been reported in Yellowstone?",
+    "tier": null,
+    "expected_label": "aggregate",
+    "stresses": "Explicit count ('how many'): stays aggregate under the narrow policy, even with a park named. Decline behavior.",
+    "notes": ""
   }
 ]

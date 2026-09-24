@@ -34,8 +34,9 @@ LOG_PATH = PROJECT_ROOT / "logs" / "answers.jsonl"
 K = 30  # candidates sent to the answer model; see retrieval eval findings for why
 
 AGGREGATE_MESSAGE = (
-    "I can't count or compare incidents across the dataset yet — I can only look up "
-    "specific reports. Try asking about specific incidents instead."
+    "I can't count or rank incidents: I can only see a sample of the reports, so any "
+    "total would be unreliable. Try asking what kinds of incidents have happened "
+    "instead, e.g. \"What drownings have been reported at Grand Canyon?\""
 )
 OFF_TOPIC_MESSAGE = (
     "I'm only equipped to answer questions about safety incidents reported in U.S. "
@@ -143,6 +144,7 @@ def ask(conn, question, history=None):
     routing = {
         "label": router_output.label,
         "reason": router_output.reason,
+        "asks_for_advice": router_output.asks_for_advice,
         "park_codes": router_output.park_codes,
         "states": router_output.states,
         "exclude_park_codes": router_output.exclude_park_codes,

@@ -33,6 +33,14 @@ PARTIAL_RESULTS_FOOTER = (
     "every relevant report in the dataset."
 )
 
+# Shown under answers to questions the router marked as asking for advice. The answer
+# model may only use the reports (see answer.py SYSTEM_PROMPT), so pointing to official
+# guidance has to come from the app.
+ADVICE_NOTICE = (
+    "Note: I can only share what incident reports say, not general safety advice. For "
+    "guidance before your visit, check the park's website (nps.gov) or ask a ranger."
+)
+
 
 def convert_citations(answer_text, incidents_by_id):
     """Replace [incident_id] citations with sequential [N] numbers, assigned in order
@@ -99,6 +107,12 @@ def main():
 
             print()
             print(converted)
+            # "complete" is only in results that reached the answer step, so declines and
+            # clarifying questions never get either notice.
+            answered = "complete" in result
+            if answered and (result.get("routing") or {}).get("asks_for_advice"):
+                print()
+                print(ADVICE_NOTICE)
             if result.get("complete") is False:
                 print()
                 print(PARTIAL_RESULTS_FOOTER)

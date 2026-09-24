@@ -4,7 +4,7 @@ Answer a question about park safety from retrieved incident reports.
 
 from datetime import date
 
-from rag_nps.openai_client import client
+from rag_nps.openai_client import client, model_options
 from rag_nps.parks import PARKS
 
 # The source has no reports from September 2015 through March 2017.
@@ -230,21 +230,14 @@ def answer_response(system_prompt, user_message, model=CHAT_MODEL, effort=REASON
     """Call the chat model and return the full Responses API response, for callers that
     need token usage as well as the text (tests/manual/answer_check.py).
 
-    `effort` is the GPT-6 reasoning effort ("none", "low", "medium", "high", ...). It is
-    sent only to GPT-6 models, since older models reject the reasoning parameter.
-    temperature=0 is sent only with effort "none" (or a non-GPT-6 model), because GPT-6
-    models reject temperature at any other effort.
+    `effort` is the GPT-6 reasoning effort ("none", "low", "medium", "high", ...); see
+    openai_client.model_options for how it and temperature are sent.
     """
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_message},
     ]
-    extra = {}
-    if model.startswith("gpt-6"):
-        extra["reasoning"] = {"effort": effort}
-    if not model.startswith("gpt-6") or effort == "none":
-        extra["temperature"] = 0
-    return client.responses.create(model=model, input=messages, **extra)
+    return client.responses.create(model=model, input=messages, **model_options(model, effort))
 
 
 def generate_answer(system_prompt, user_message, model=CHAT_MODEL, effort=REASONING_EFFORT):

@@ -4,9 +4,10 @@ it can be routed and embedded on its own — a follow-up like "what about in Den
 means little as a search query without knowing what the previous question was about.
 """
 
-from rag_nps.openai_client import client
+from rag_nps.openai_client import client, model_options
 
 CHAT_MODEL = "gpt-6-luna"
+REASONING_EFFORT = "none"
 
 CONDENSE_SYSTEM_PROMPT = """\
 You prepare the user's latest question in a conversation about National Park safety \
@@ -82,7 +83,7 @@ def _format_transcript(history):
     return "\n".join(f"{speakers[entry['role']]}: {entry['content']}" for entry in history)
 
 
-def condense_question(question, history, model=CHAT_MODEL):
+def condense_question(question, history, model=CHAT_MODEL, effort=REASONING_EFFORT):
     """Rewrite `question` into a standalone query if it depends on earlier turns,
     otherwise return it unchanged.
 
@@ -98,8 +99,8 @@ def condense_question(question, history, model=CHAT_MODEL):
     invented elaboration instead of rewriting them. Tagging it as inert reference data
     is the same fix already used for retrieved incidents in answer.format_context.
 
-    `model` defaults to CHAT_MODEL; tests/manual/condense_check.py passes others to
-    compare them.
+    `model` and `effort` default to CHAT_MODEL / REASONING_EFFORT;
+    tests/manual/condense_check.py passes others to compare them.
     """
     if not history:
         return question
@@ -113,13 +114,7 @@ def condense_question(question, history, model=CHAT_MODEL):
         {"role": "system", "content": CONDENSE_SYSTEM_PROMPT},
         {"role": "user", "content": user_message},
     ]
-    # GPT-6 models are reasoning models: temperature is only accepted with reasoning
-    # effort "none", and older models reject the reasoning parameter entirely.
-    extra = {"reasoning": {"effort": "none"}} if model.startswith("gpt-6") else {}
     response = client.responses.create(
-        model=model,
-        input=messages,
-        temperature=0,
-        **extra,
+        model=model, input=messages, **model_options(model, effort)
     )
     return response.output_text.strip()
