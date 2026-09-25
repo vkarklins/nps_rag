@@ -20,9 +20,9 @@ services:
     runtime: python
     plan: free                 # sleeps after 15 min idle; open it a minute before the demo
     region: oregon
-    buildCommand: poetry install &&cd frontend && npm ci && npm run build
+    buildCommand: poetry install && cd frontend && npm ci && npm run build
     startCommand: poetry run uvicorn rag_nps.api:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /
+    healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
