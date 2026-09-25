@@ -1,0 +1,54 @@
+# Render Blueprint for the NPS safety RAG app.
+# Creates: one Postgres database + one web service (FastAPI serving the built React UI).
+# The blueprint only creates an EMPTY database. Loading the incidents table
+# (CREATE EXTENSION vector + pg_restore) is a manual step done once from your machine.
+
+databases:
+  - name: rag-nps-db
+    databaseName: rag_nps
+    user: rag_nps
+    plan: free                 # free instances expire after 30 days; basic-256mb if you need longer
+    region: oregon             # must match the web service's region for the internal connection
+    postgresMajorVersion: "17" # set to >= your local Postgres major version (psql --version)
+    ipAllowList:               # lets you pg_restore from your machine; tighten or empty it afterwards
+      - source: 0.0.0.0/0
+        description: everywhere
+
+services:
+  - type: web
+    name: rag-nps
+    runtime: python
+    plan: free                 # sleeps after 15 min idle; open it a minute before the demo
+    region: oregon
+    buildCommand: poetry install &&cd frontend && npm ci && npm run build
+    startCommand: poetry run uvicorn rag_nps.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: OPENAI_API_KEY
+        sync: false            # Render asks for the value when you apply the blueprint
+      # db_connect.get_connection() reads these five; they point at the internal
+      # hostname, so no SSL settings are needed.
+      - key: DB_HOST
+        fromDatabase:
+          name: rag-nps-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: rag-nps-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: rag-nps-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: rag-nps-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: rag-nps-db
+          property: password
