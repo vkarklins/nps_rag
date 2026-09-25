@@ -92,7 +92,7 @@ def main():
         while True:
             try:
                 question = input(
-                    "\nAsk a question about national park safety (type 'exit' or 'quit' to stop): "
+                    "\nAsk about incidents in national parks (type 'exit' or 'quit' to stop): "
                 ).strip()
             except EOFError:
                 break

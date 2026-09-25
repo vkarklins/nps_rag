@@ -57,7 +57,8 @@ def fake_route(question):
 
 
 def fake_retrieve(conn, question, k=10, *, park_codes=None, exclude_park_codes=None,
-                  start_date=None, end_date=None):
+                  start_date=None, end_date=None, min_per_park=0):
+    # min_per_park is accepted so the real api.stream_ask can call this; the mock ignores it.
     words = [w for w in re.findall(r"[a-z]+", question.lower()) if w not in STOPWORDS]
     scored = []
     for inc in INCIDENTS:

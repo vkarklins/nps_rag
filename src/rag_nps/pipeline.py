@@ -32,6 +32,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOG_PATH = PROJECT_ROOT / "logs" / "answers.jsonl"
 
 K = 30  # candidates sent to the answer model; see retrieval eval findings for why
+# When a question names two or more parks, each is guaranteed at least this many of the K
+# reports, so one park's reports can't crowd out another's (see retrieval.retrieve).
+MIN_PER_PARK = 5
 
 AGGREGATE_MESSAGE = (
     "I can't count or rank incidents: I can only see a sample of the reports, so any "
@@ -58,7 +61,7 @@ def resolve_park_codes(park_codes, states):
 def answer_question(
     conn, question, *,
     park_codes=None, exclude_park_codes=None, start_date=None, end_date=None,
-    routing=None, raw_question=None, history_length=None,
+    min_per_park=0, routing=None, raw_question=None, history_length=None,
 ):
     """Retrieve incidents for `question`, generate an answer, log the run, and return it.
 
@@ -86,6 +89,7 @@ def answer_question(
         conn, question, k=K,
         park_codes=park_codes, exclude_park_codes=exclude_park_codes,
         start_date=start_date, end_date=end_date,
+        min_per_park=min_per_park,
     )
     collapsed = collapse_duplicates(results)
 
@@ -110,6 +114,7 @@ def answer_question(
             "exclude_park_codes": exclude_park_codes,
             "start_date": str(start_date) if start_date else None,
             "end_date": str(end_date) if end_date else None,
+            "min_per_park": min_per_park,
         },
         "k": K,
         "retrieved": [{"incident_id": r["incident_id"], "distance": r["distance"]} for r in results],
@@ -182,6 +187,9 @@ def ask(conn, question, history=None):
             exclude_park_codes=exclude_park_codes or None,
             start_date=router_output.start_date,
             end_date=router_output.end_date,
+            # Only when the question itself named 2+ parks; parks expanded from a state
+            # keep their natural share (a state question is about the state as a whole).
+            min_per_park=MIN_PER_PARK if len(router_output.park_codes) > 1 else 0,
             routing=routing,
             raw_question=question,
             history_length=history_length,

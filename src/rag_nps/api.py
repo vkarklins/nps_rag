@@ -61,6 +61,7 @@ from rag_nps.parks import PARKS
 from rag_nps.pipeline import (
     AGGREGATE_MESSAGE,
     K,
+    MIN_PER_PARK,
     NO_MATCHING_PARKS_MESSAGE,
     OFF_TOPIC_MESSAGE,
     _log,
@@ -196,6 +197,8 @@ def stream_ask(question, history):
     exclude_park_codes = exclude_park_codes or None
     start_date, end_date = router_output.start_date, router_output.end_date
     filtered = bool(park_codes or exclude_park_codes or start_date or end_date)
+    # Same rule as pipeline.ask(): only when the question itself named 2+ parks.
+    min_per_park = MIN_PER_PARK if len(router_output.park_codes) > 1 else 0
 
     conn = get_connection()
     try:
@@ -203,6 +206,7 @@ def stream_ask(question, history):
             conn, condensed, k=K,
             park_codes=park_codes, exclude_park_codes=exclude_park_codes,
             start_date=start_date, end_date=end_date,
+            min_per_park=min_per_park,
         )
     finally:
         conn.close()
@@ -246,6 +250,7 @@ def stream_ask(question, history):
             "exclude_park_codes": exclude_park_codes,
             "start_date": str(start_date) if start_date else None,
             "end_date": str(end_date) if end_date else None,
+            "min_per_park": min_per_park,
         },
         "k": K,
         "retrieved": [{"incident_id": r["incident_id"], "distance": r["distance"]} for r in results],

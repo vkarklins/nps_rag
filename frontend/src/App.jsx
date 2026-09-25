@@ -150,7 +150,7 @@ export default function App() {
           </svg>
           <div>
             <h1>Trailhead</h1>
-            <p className="tagline">Safety questions, answered from National Park Service incident reports</p>
+            <p className="tagline">What's happened in the parks, from National Park Service incident reports</p>
           </div>
         </div>
         <div className="topbar-right">
@@ -170,10 +170,11 @@ export default function App() {
           <div className="scroll" ref={scrollRef} onScroll={onScroll}>
             {messages.length === 0 ? (
               <div className="welcome">
-                <h2>What would you like to know before you go?</h2>
+                <h2>Learn from what's happened to other visitors</h2>
                 <p>
                   Ask about accidents, wildlife encounters, rescues and other incidents from 12,105
-                  reports across 62 national parks. Answers cite the reports they come from.
+                  reports across 63 national parks. Answers cite the reports they come from and share
+                  only what the reports say. For safety advice, check nps.gov or ask a ranger.
                 </p>
                 <div className="examples">
                   {EXAMPLES.map((q) => (
@@ -212,7 +213,7 @@ export default function App() {
                   send(input);
                 }
               }}
-              placeholder="Ask about safety incidents in a national park…"
+              placeholder="Ask about incidents in a national park…"
               rows={1}
               aria-label="Your question"
             />
