@@ -1,8 +1,7 @@
-# Park photos
+# Park photo originals
 
-Drop your own photos here, e.g. `yose-1.jpg`, `yose-2.jpg`, then list them in
-`src/parkPhotos.js` under the park code:
+Full-size originals go here, named by park code, e.g. `yose-1.jpg`, `yose-2.jpg`.
+They are not committed (see `frontend/.gitignore`) and the app doesn't load them.
 
-    YOSE: ["/parks/yose-1.jpg", "/parks/yose-2.jpg"],
-
-Parks with no photos listed get a drawn placeholder scene in the park's landscape colours.
+The app uses resized copies in `public/gallery/` (1600px on the long side, camera
+metadata removed), listed by park code in `src/parkPhotos.js`.

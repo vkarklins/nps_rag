@@ -1,2 +1,6 @@
 node_modules/
 dist/
+# Full-size photo originals; the app uses the resized copies in public/gallery/
+public/parks/*.jpg
+public/parks/*.jpeg
+public/parks/*.JPG

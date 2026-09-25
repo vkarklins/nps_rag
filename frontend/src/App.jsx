@@ -2,20 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { askStream } from "./api.js";
 import { BIOMES, biomeStyle, dominantBiome } from "./biomes.js";
 import { convertedText, parseAnswer } from "./citations.js";
+import { pickExamples } from "./examples.js";
 import AssistantMessage from "./components/Message.jsx";
 import Gallery from "./components/Gallery.jsx";
 import Landscape from "./components/Landscape.jsx";
 
 const MAX_HISTORY = 20; // same as history.MAX_HISTORY
 
-const EXAMPLES = [
-  "What bear encounters have been reported in Glacier?",
-  "Have hikers suffered heat illness in Death Valley?",
-  "What falls have happened at the Grand Canyon?",
-  "What climbing accidents have happened on Denali?",
-  "Any snorkeling or swimming incidents in the Virgin Islands?",
-  "What should I know about thermal areas in Yellowstone?",
-];
+const EXAMPLES = pickExamples();
 
 let nextId = 1;
 

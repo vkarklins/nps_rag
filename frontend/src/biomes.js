@@ -69,8 +69,7 @@ export const PARK_BIOMES = {
   // Forests
   GRSM: "forest", SHEN: "forest", CONG: "forest", CUVA: "forest", REDW: "forest",
   OLYM: "forest", MACA: "forest", HOSP: "forest", NERI: "forest", ACAD: "forest",
-  VOYA: "forest", ISRO: "forest", SEKI: "forest", YOSE: "forest", LAVO: "forest",
-  INDU: "forest",
+  VOYA: "forest", ISRO: "forest", SEKI: "forest", YOSE: "forest", INDU: "forest",
   // Alpine mountains
   ROMO: "alpine", GLAC: "alpine", GRTE: "alpine", MORA: "alpine", NOCA: "alpine",
   CRLA: "alpine", YELL: "alpine",
@@ -81,7 +80,7 @@ export const PARK_BIOMES = {
   BISC: "coastal", DRTO: "coastal", EVER: "coastal", VIIS: "coastal", NPSA: "coastal",
   CHIS: "coastal",
   // Volcanic
-  HAVO: "volcanic", HALE: "volcanic",
+  HAVO: "volcanic", HALE: "volcanic", LAVO: "volcanic",
   // Prairie & badlands
   BADL: "prairie", THRO: "prairie", WICA: "prairie",
   // JEFF (Gateway Arch) and anything unknown -> default
