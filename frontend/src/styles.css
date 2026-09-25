@@ -91,8 +91,8 @@ button { font: inherit; cursor: pointer; }
 /* ---------- Layout ---------- */
 .layout {
   position: relative; z-index: 1; flex: 1; min-height: 0;
-  display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px;
-  width: 100%; max-width: 1240px; margin: 0 auto; padding: 8px 28px 24px;
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 30vw, 520px); gap: 24px;
+  width: 100%; max-width: 1480px; margin: 0 auto; padding: 8px 28px 24px;
 }
 .chat {
   display: flex; flex-direction: column; min-height: 0;
