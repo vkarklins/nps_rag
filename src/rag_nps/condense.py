@@ -115,6 +115,6 @@ def condense_question(question, history, model=CHAT_MODEL, effort=REASONING_EFFO
         {"role": "user", "content": user_message},
     ]
     response = client.responses.create(
-        model=model, input=messages, **model_options(model, effort)
+        model=model, input=messages, name="condense-question", **model_options(model, effort)
     )
     return response.output_text.strip()

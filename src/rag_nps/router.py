@@ -134,6 +134,7 @@ def route_query(question, model=CHAT_MODEL, effort=REASONING_EFFORT):
             {"role": "user", "content": question},
         ],
         text_format=RouterOutput,
+        name="route-question",
         **model_options(model, effort),
     )
     return response.output_parsed

@@ -16,6 +16,8 @@ let nextId = 1;
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [history, setHistory] = useState([]);
+  // Groups this conversation's questions into one Langfuse session (see api.py).
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [scene, setScene] = useState({ parks: [], source: "none" });
@@ -64,6 +66,7 @@ export default function App() {
       await askStream({
         question,
         history,
+        sessionId,
         signal: controller.signal,
         onEvent: (event, data) => {
           switch (event) {
@@ -129,6 +132,7 @@ export default function App() {
     abortRef.current?.abort();
     setMessages([]);
     setHistory([]);
+    setSessionId(crypto.randomUUID());
     setScene({ parks: [], source: "none" });
   }
 

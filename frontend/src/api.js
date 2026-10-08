@@ -2,11 +2,11 @@
 // src/rag_nps/api.py for the event list). EventSource only supports GET, so this reads
 // the fetch() body stream and splits it into events itself.
 
-export async function askStream({ question, history, signal, onEvent }) {
+export async function askStream({ question, history, sessionId, signal, onEvent }) {
   const response = await fetch("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, history }),
+    body: JSON.stringify({ question, history, session_id: sessionId }),
     signal,
   });
   if (!response.ok || !response.body) {

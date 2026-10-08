@@ -15,6 +15,9 @@ earlier turns is true on every turn past that point.
 """
 
 import re
+import uuid
+
+from langfuse import get_client
 
 from rag_nps.db_connect import get_connection
 from rag_nps.history import append_turn
@@ -88,6 +91,9 @@ def build_source_list(numbers, incidents_by_id):
 def main():
     conn = get_connection()
     history = []
+    # One Langfuse session per CLI run: every question in this conversation is grouped
+    # under it in the Sessions view.
+    session_id = f"cli-{uuid.uuid4()}"
     try:
         while True:
             try:
@@ -101,7 +107,7 @@ def main():
             if not question:
                 continue
 
-            result = ask(conn, question, history=history)
+            result = ask(conn, question, history=history, session_id=session_id)
             incidents_by_id = {incident["incident_id"]: incident for incident in result["incidents"]}
             converted, numbers, unknown = convert_citations(result["answer"], incidents_by_id)
 
@@ -129,6 +135,7 @@ def main():
                 print("Note: this conversation has gone on long enough that earlier turns are no longer in context.")
     finally:
         conn.close()
+        get_client().flush()  # send any traces still queued before the process exits
 
 
 if __name__ == "__main__":

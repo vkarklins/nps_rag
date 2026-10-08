@@ -14,6 +14,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from langfuse import get_client, observe, propagate_attributes
+
 from rag_nps.answer import (
     SYSTEM_PROMPT,
     build_user_message,
@@ -130,7 +132,8 @@ def answer_question(
     return {**log_entry, "incidents": collapsed}
 
 
-def ask(conn, question, history=None):
+@observe(name="answer-question", as_type="chain", capture_input=False, capture_output=False)
+def ask(conn, question, history=None, session_id=None):
     """Route `question`, then either answer it, decline politely, or ask for
     clarification. Always returns a dict with at least "answer" and "incidents"
     (empty unless retrieval ran), so callers don't need to branch on label themselves.
@@ -140,7 +143,42 @@ def ask(conn, question, history=None):
     standalone one (see condense.condense_question) before routing or retrieval ever
     see it; `ask` doesn't store or update history itself, that's the caller's job.
     Defaults to an empty conversation, which skips condensing entirely.
+
+    Each call is one Langfuse trace, "answer-question": the user's question in, the
+    answer out, with the condense/route/retrieve/answer steps nested inside.
+    `session_id` groups a conversation's traces into one Langfuse session; the CLI
+    passes one per run.
     """
+    with propagate_attributes(session_id=session_id, tags=["cli"]):
+        langfuse = get_client()
+        langfuse.update_current_span(input=[{"role": "user", "content": question}])
+        result = _ask(conn, question, history)
+        langfuse.update_current_span(
+            output=[{"role": "assistant", "content": result["answer"]}],
+            metadata=trace_metadata(result),
+        )
+        return result
+
+
+def trace_metadata(result):
+    """The routing decision and retrieval summary for a finished question, as metadata
+    on its Langfuse trace (filterable in the UI). Used by both the CLI and the web API."""
+    routing = result.get("routing") or {}
+    label = routing.get("label")
+    return {
+        "standalone_question": result.get("question"),
+        "history_length": result.get("history_length"),
+        "label": getattr(label, "value", label),
+        "asks_for_advice": routing.get("asks_for_advice"),
+        "answered": "complete" in result,
+        "complete": result.get("complete"),
+        "n_retrieved": result.get("n_retrieved"),
+        "n_after_collapse": result.get("n_after_collapse"),
+    }
+
+
+def _ask(conn, question, history=None):
+    """The body of ask(), without the Langfuse trace wrapper."""
     history = history or []
     history_length = len(history)
     condensed_question = condense_question(question, history)

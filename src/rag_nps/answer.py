@@ -237,7 +237,9 @@ def answer_response(system_prompt, user_message, model=CHAT_MODEL, effort=REASON
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_message},
     ]
-    return client.responses.create(model=model, input=messages, **model_options(model, effort))
+    return client.responses.create(
+        model=model, input=messages, name="generate-answer", **model_options(model, effort)
+    )
 
 
 def generate_answer(system_prompt, user_message, model=CHAT_MODEL, effort=REASONING_EFFORT):

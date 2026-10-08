@@ -41,6 +41,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from langfuse import get_client, observe, propagate_attributes
 from pydantic import BaseModel
 
 from rag_nps.answer import (
@@ -66,6 +67,7 @@ from rag_nps.pipeline import (
     OFF_TOPIC_MESSAGE,
     _log,
     resolve_park_codes,
+    trace_metadata,
 )
 from rag_nps.retrieval import collapse_duplicates, retrieve
 from rag_nps.router import Label, route_query
@@ -93,6 +95,9 @@ class Turn(BaseModel):
 class AskRequest(BaseModel):
     question: str
     history: list[Turn] = []
+    # Set by the browser once per conversation (a new one after "New conversation"), so
+    # a conversation's questions are grouped into one Langfuse session.
+    session_id: str | None = None
 
 
 def sse(event, data):
@@ -114,6 +119,7 @@ def stream_answer(user_message):
             {"role": "user", "content": user_message},
         ],
         stream=True,
+        name="generate-answer",
         **model_options(CHAT_MODEL, REASONING_EFFORT),
     )
     for event in stream:
@@ -123,8 +129,28 @@ def stream_answer(user_message):
             raise RuntimeError(f"OpenAI stream failed: {event}")
 
 
-def stream_ask(question, history):
-    """Generator of SSE strings for one question. Mirrors pipeline.ask()."""
+@observe(name="answer-question", as_type="chain", capture_input=False, capture_output=False)
+def stream_ask(question, history, session_id=None):
+    """Generator of SSE strings for one question. Mirrors pipeline.ask(), including its
+    Langfuse trace: one "answer-question" trace per question, tagged "web", grouped into
+    the browser conversation's session. (@observe keeps the trace context intact across
+    the generator's yields, which a plain `with` block in a streamed response would not.)
+    """
+    with propagate_attributes(session_id=session_id, tags=["web"]):
+        get_client().update_current_span(input=[{"role": "user", "content": question}])
+        yield from _stream_ask(question, history)
+
+
+def _finish_trace(log_entry):
+    """Record the answer and routing summary on the current "answer-question" trace."""
+    get_client().update_current_span(
+        output=[{"role": "assistant", "content": log_entry["answer"]}],
+        metadata=trace_metadata(log_entry),
+    )
+
+
+def _stream_ask(question, history):
+    """The body of stream_ask(), without the Langfuse trace wrapper."""
     history = history[-MAX_HISTORY:]
     history_length = len(history)
 
@@ -180,7 +206,7 @@ def stream_ask(question, history):
     if decline is not None:
         yield sse("delta", {"text": decline})
         yield sse("done", {"answered": False, "complete": None, "asks_for_advice": False})
-        _log({
+        log_entry = {
             "timestamp": datetime.now().isoformat(timespec="seconds"),
             "question": condensed,
             "raw_question": question,
@@ -188,7 +214,9 @@ def stream_ask(question, history):
             "routing": routing,
             "answer": decline,
             "source": "web",
-        })
+        }
+        _finish_trace(log_entry)
+        _log(log_entry)
         return
 
     # Retrieval, same as pipeline.answer_question().
@@ -239,7 +267,7 @@ def stream_ask(question, history):
         "asks_for_advice": router_output.asks_for_advice,
     })
 
-    _log({
+    log_entry = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "question": condensed,
         "raw_question": question,
@@ -261,14 +289,16 @@ def stream_ask(question, history):
         "prompt": user_message,
         "answer": "".join(parts),
         "source": "web",
-    })
+    }
+    _finish_trace(log_entry)
+    _log(log_entry)
 
 
-def safe_stream(question, history):
+def safe_stream(question, history, session_id=None):
     """Wrap stream_ask so an exception becomes an `error` event instead of a cut-off
     stream the browser can't explain."""
     try:
-        yield from stream_ask(question, history)
+        yield from stream_ask(question, history, session_id=session_id)
     except Exception as exc:  # noqa: BLE001 - report anything to the browser
         print(f"[api] error answering {question!r}:")
         traceback.print_exc()
@@ -279,7 +309,7 @@ def safe_stream(question, history):
 def ask_endpoint(request: AskRequest):
     history = [turn.model_dump() for turn in request.history]
     return StreamingResponse(
-        safe_stream(request.question, history),
+        safe_stream(request.question, history, session_id=request.session_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

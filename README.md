@@ -25,6 +25,28 @@ incident narratives (deaths, injuries, rescues, wildlife encounters, law enforce
 Every question is logged to `logs/answers.jsonl` (routing, filters, retrieved IDs and distances,
 prompt, answer).
 
+### Tracing with Langfuse (optional)
+
+With the `LANGFUSE_*` variables set in `.env` (see `.env.example`), every question is also
+sent to [Langfuse](https://langfuse.com) as one `answer-question` trace:
+
+```
+answer-question (chain)          question in, answer out; routing summary in metadata
+├── condense-question (generation)   only when there is conversation history
+├── route-question (generation)
+├── retrieve-incidents (retriever)   query + filters in, retrieved reports out
+│   └── embed-texts (embedding)
+└── generate-answer (generation)     skipped when the question is declined
+```
+
+Generations record model, prompt, output, token usage and cost automatically (through
+Langfuse's OpenAI wrapper in `openai_client.py`). Traces are tagged `cli` or `web`, and a
+conversation's questions share a Langfuse session (one per CLI run, one per browser
+conversation). Without the variables the app runs exactly as before.
+
+`get_embeddings` (the bulk embedding job) uses the same client, so it would send one trace
+per batch; run it with `LANGFUSE_TRACING_ENABLED=false` to skip that.
+
 ## Project layout
 
 | Path | What's there |

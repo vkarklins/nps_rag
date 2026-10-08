@@ -49,7 +49,7 @@ def generate_embeddings(texts):
     if any(not text.strip() for text in texts):
         raise ValueError("cannot embed an empty string")  # the API rejects empty inputs
 
-    response = client.embeddings.create(input=texts, model=EMBEDDING_MODEL)
+    response = client.embeddings.create(input=texts, model=EMBEDDING_MODEL, name="embed-texts")
 
     # Each result carries the position of its input; sort on it rather than trusting the order.
     ordered = sorted(response.data, key=lambda item: item.index)

@@ -13,12 +13,17 @@ k, so one park can't crowd another out entirely. See _keep_minimums().
 
 collapse_duplicates() is applied to the results afterwards: some reports are copied onto
 several park pages, and identical copies would otherwise fill several of the k slots.
+
+Each retrieve() call is recorded in Langfuse as a "retrieve-incidents" retriever
+observation: the query and filters as input, the reports found (with their text, which
+retrieval evaluations need) as output. The query's embedding call nests inside it.
 """
 
+from langfuse import get_client
 from pgvector import Vector
 from psycopg2.extras import RealDictCursor
 
-from rag_nps.get_embeddings import generate_embeddings
+from rag_nps.get_embeddings import EMBEDDING_MODEL, generate_embeddings
 
 # `<=>` is pgvector's cosine distance: 0 means identical direction, larger means less similar.
 # The query vector is sent to the database only once (in `scored`).
@@ -73,26 +78,55 @@ def retrieve(conn, question, k=10, *, park_codes=None, exclude_park_codes=None,
     Incidents with no date are left out whenever a date bound is given.
     Returns at most k rows; fewer only when fewer than k incidents match the filters.
     """
-    [query_embedding] = generate_embeddings([question])
-
     if park_codes:
         min_per_park = min(min_per_park, k // len(park_codes))
     else:
         min_per_park = 0  # no parks to guarantee anything to
 
-    params = {
-        "query": Vector(query_embedding),
-        "k": k,
+    filters = {
         "park_codes": park_codes or None,  # an empty list means "no filter", not "no parks"
         "exclude_park_codes": exclude_park_codes or None,  # empty list: exclude nothing
         "start_date": start_date,
         "end_date": end_date,
         "min_per_park": min_per_park,
     }
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(SEARCH_SQL, params)
-        rows = [dict(row) for row in cur.fetchall()]
-    return _keep_minimums(rows, k, min_per_park)
+
+    with get_client().start_as_current_observation(
+        as_type="retriever",
+        name="retrieve-incidents",
+        input={"query": question, "k": k, "filters": filters},
+    ) as observation:
+        [query_embedding] = generate_embeddings([question])
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(SEARCH_SQL, {"query": Vector(query_embedding), "k": k, **filters})
+            rows = [dict(row) for row in cur.fetchall()]
+        results = _keep_minimums(rows, k, min_per_park)
+
+        observation.update(
+            output=[_trace_view(r) for r in results],
+            metadata={
+                "table": "incidents",
+                "embedding_model": EMBEDDING_MODEL,
+                "distance": "cosine",
+                "n_results": len(results),
+            },
+        )
+    return results
+
+
+def _trace_view(row):
+    """The fields of a retrieved incident worth keeping in a Langfuse trace: enough to
+    see what was found and how close it was, plus the body, which is the context the
+    answer model reads and what faithfulness/relevance evaluations need."""
+    return {
+        "incident_id": row["incident_id"],
+        "park_code": row["park_code"],
+        "incident_date": row["incident_date"],
+        "title": row["title"],
+        "distance": row["distance"],
+        "body": row["body"],
+    }
 
 
 def _keep_minimums(rows, k, min_per_park):
